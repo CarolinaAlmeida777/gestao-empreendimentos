@@ -1,0 +1,152 @@
+<div class="pagina">
+  <header class="cabecalho">
+    <div class="cabecalho__titulo">
+      <span class="cabecalho__eyebrow">Painel operacional</span>
+      <h1>Empreendimentos</h1>
+    </div>
+    <a routerLink="/empreendimentos/novo" class="botao botao--primario">
+      <span aria-hidden="true">+</span> Novo empreendimento
+    </a>
+  </header>
+
+  <section class="filtros" aria-label="Filtros de busca">
+    <div class="filtros__campo">
+      <label for="filtro-nome">Buscar por nome</label>
+      <input
+        id="filtro-nome"
+        type="text"
+        placeholder="Ex: Residencial Jardins"
+        [ngModel]="filtroNome()"
+        (ngModelChange)="onFiltroNomeChange($event)"
+      />
+    </div>
+
+    <div class="filtros__campo">
+      <label for="filtro-status">Status</label>
+      <select id="filtro-status" [ngModel]="filtroStatus()" (ngModelChange)="onFiltroStatusChange($event)">
+        <option [ngValue]="undefined">Todos</option>
+        <option value="Ativo">Ativo</option>
+        <option value="Inativo">Inativo</option>
+      </select>
+    </div>
+
+    <div class="filtros__campo">
+      <label for="ordenar-por">Ordenar por</label>
+      <select id="ordenar-por" [ngModel]="ordenarPor()" (ngModelChange)="onOrdenarPorChange($event)">
+        <option value="nome">Nome</option>
+        <option value="dataCriacao">Data de criação</option>
+      </select>
+    </div>
+
+    <button
+      type="button"
+      class="botao botao--secundario botao--icone"
+      (click)="alternarDirecao()"
+      [attr.aria-label]="decrescente() ? 'Ordem decrescente' : 'Ordem crescente'"
+      title="Alternar direção da ordenação"
+    >
+      {{ decrescente() ? '↓' : '↑' }}
+    </button>
+  </section>
+
+  @if (!loadingService.carregando() && resultado() && resultado()!.itens.length === 0) {
+    <div class="estado-vazio">
+      <p class="estado-vazio__titulo">Nenhum empreendimento encontrado</p>
+      <p class="estado-vazio__texto">
+        @if (filtroNome() || filtroStatus()) {
+          Ajuste os filtros ou cadastre um novo empreendimento.
+        } @else {
+          Cadastre o primeiro empreendimento para começar.
+        }
+      </p>
+    </div>
+  } @else {
+    <div class="tabela-wrapper">
+      <table class="tabela">
+        <thead>
+          <tr>
+            <th scope="col">Status</th>
+            <th scope="col">Nome</th>
+            <th scope="col">CNPJ</th>
+            <th scope="col">Endereço</th>
+            <th scope="col">Criado em</th>
+            <th scope="col" class="tabela__acoes-cabecalho">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of resultado()?.itens ?? []; track item.id) {
+            <tr>
+              <td>
+                <span class="status" [class.status--ativo]="item.status === 'Ativo'" [class.status--inativo]="item.status === 'Inativo'">
+                  <span class="status__luz" aria-hidden="true"></span>
+                  {{ item.status }}
+                </span>
+              </td>
+              <td class="tabela__nome">{{ item.nome }}</td>
+              <td class="tabela__mono">{{ item.cnpj }}</td>
+              <td>{{ item.endereco ?? '—' }}</td>
+              <td class="tabela__mono">{{ item.dataCriacao | dataBr }}</td>
+              <td class="tabela__acoes">
+                <a [routerLink]="['/empreendimentos', item.id, 'editar']"
+                   class="link-acao"
+                   [class.link-acao--desabilitado]="item.status === 'Inativo'"
+                   [attr.aria-disabled]="item.status === 'Inativo'"
+                   [title]="item.status === 'Inativo' ? 'Empreendimentos inativos não podem ser editados' : 'Editar'">
+                  Editar
+                </a>
+                @if (item.status === 'Ativo') {
+                  <button type="button" class="link-acao link-acao--perigo" (click)="confirmarInativacao(item)">
+                    Inativar
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (resultado() && resultado()!.totalPaginas > 1) {
+      <nav class="paginacao" aria-label="Navegação de páginas">
+        <button
+          type="button"
+          class="botao botao--secundario"
+          [disabled]="pagina() <= 1"
+          (click)="irParaPagina(pagina() - 1)"
+        >
+          ← Anterior
+        </button>
+
+        <span class="paginacao__info">
+          Página {{ resultado()!.pagina }} de {{ resultado()!.totalPaginas }}
+          · {{ resultado()!.totalItens }} {{ resultado()!.totalItens === 1 ? 'registro' : 'registros' }}
+        </span>
+
+        <button
+          type="button"
+          class="botao botao--secundario"
+          [disabled]="pagina() >= resultado()!.totalPaginas"
+          (click)="irParaPagina(pagina() + 1)"
+        >
+          Próxima →
+        </button>
+      </nav>
+    }
+  }
+</div>
+
+@if (itemParaInativar()) {
+  <div class="modal-fundo" (click)="cancelarInativacao()">
+    <div class="modal" role="dialog" aria-modal="true" [attr.aria-label]="'Confirmar inativação'" (click)="$event.stopPropagation()">
+      <h2>Inativar empreendimento?</h2>
+      <p>
+        <strong>{{ itemParaInativar()!.nome }}</strong> será marcado como inativo e não poderá mais ser editado.
+        Esta ação não exclui o registro e pode ser revertida apenas por um administrador no banco de dados.
+      </p>
+      <div class="modal__acoes">
+        <button type="button" class="botao botao--secundario" (click)="cancelarInativacao()">Cancelar</button>
+        <button type="button" class="botao botao--perigo" (click)="inativar()">Inativar</button>
+      </div>
+    </div>
+  </div>
+}

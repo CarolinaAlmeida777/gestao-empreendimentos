@@ -1,0 +1,79 @@
+/* ==========================================================================
+   Design tokens — Sistema de Gestão de Empreendimentos
+   Paleta inspirada em painéis de monitoramento: grafite + terracota + oliva.
+   ========================================================================== */
+:root {
+  /* Cores */
+  --cor-grafite: #1c2128;
+  --cor-grafite-suave: #2c333d;
+  --cor-branco: #ffffff;
+  --cor-areia: #f7f5f2;
+  --cor-areia-escura: #ece8e1;
+  --cor-terracota: #c75d45;
+  --cor-terracota-escura: #a64a35;
+  --cor-oliva: #5b7553;
+  --cor-oliva-clara: #e8efe5;
+  --cor-cinza-pedra: #8b8f94;
+  --cor-cinza-linha: #e2e0db;
+  --cor-erro: #b3422f;
+  --cor-erro-fundo: #faeae6;
+
+  /* Tipografia */
+  --fonte-display: 'Space Grotesk', 'Inter', sans-serif;
+  --fonte-corpo: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Espaçamento */
+  --espaco-xs: 4px;
+  --espaco-sm: 8px;
+  --espaco-md: 16px;
+  --espaco-lg: 24px;
+  --espaco-xl: 40px;
+
+  /* Bordas e sombra */
+  --raio-sm: 6px;
+  --raio-md: 10px;
+  --sombra-card: 0 1px 3px rgba(28, 33, 40, 0.06), 0 1px 2px rgba(28, 33, 40, 0.04);
+  --sombra-elevada: 0 8px 24px rgba(28, 33, 40, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--fonte-corpo);
+  color: var(--cor-grafite);
+  background: var(--cor-areia);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--fonte-display);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+button, input, select {
+  font-family: inherit;
+}
+
+/* Foco visível para acessibilidade — nunca remover sem substituir */
+:focus-visible {
+  outline: 2px solid var(--cor-terracota);
+  outline-offset: 2px;
+}
+
+/* Respeita preferência do usuário por menos animação */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

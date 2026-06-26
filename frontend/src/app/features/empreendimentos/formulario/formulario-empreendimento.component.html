@@ -1,0 +1,77 @@
+<div class="pagina">
+  <header class="cabecalho">
+    <a routerLink="/empreendimentos" class="voltar">← Voltar para a listagem</a>
+    <span class="cabecalho__eyebrow">{{ modoEdicao() ? 'Editar registro' : 'Novo registro' }}</span>
+    <h1>{{ modoEdicao() ? 'Editar empreendimento' : 'Cadastrar empreendimento' }}</h1>
+  </header>
+
+  @if (carregandoInicial()) {
+    <div class="cartao">
+      <p class="texto-carregando">Carregando dados do empreendimento...</p>
+    </div>
+  } @else {
+    <form class="cartao" [formGroup]="form" (ngSubmit)="salvar()">
+      <div class="campo">
+        <label for="nome">Nome <span class="obrigatorio">*</span></label>
+        <input
+          id="nome"
+          type="text"
+          formControlName="nome"
+          placeholder="Ex: Residencial Jardins do Vale"
+          [class.campo--erro]="campoInvalido('nome')"
+        />
+        @if (campoInvalido('nome')) {
+          <p class="campo__erro">{{ mensagemErro('nome') }}</p>
+        } @else {
+          <p class="campo__ajuda">Mínimo de 3 caracteres.</p>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="cnpj">CNPJ <span class="obrigatorio">*</span></label>
+        <input
+          id="cnpj"
+          type="text"
+          formControlName="cnpj"
+          placeholder="00.000.000/0000-00"
+          inputmode="numeric"
+          maxlength="18"
+          [class.campo--erro]="campoInvalido('cnpj')"
+        />
+        @if (campoInvalido('cnpj')) {
+          <p class="campo__erro">{{ mensagemErro('cnpj') }}</p>
+        } @else {
+          <p class="campo__ajuda">Deve ser único no sistema.</p>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="endereco">Endereço</label>
+        <input
+          id="endereco"
+          type="text"
+          formControlName="endereco"
+          placeholder="Ex: Av. Paulista, 1000 — São Paulo, SP"
+        />
+        <p class="campo__ajuda">Opcional.</p>
+      </div>
+
+      @if (modoEdicao()) {
+        <div class="campo campo--info">
+          <span class="campo__rotulo-info">Status</span>
+          <span class="status" [class.status--ativo]="statusAtual() === 'Ativo'" [class.status--inativo]="statusAtual() === 'Inativo'">
+            <span class="status__luz" aria-hidden="true"></span>
+            {{ statusAtual() }}
+          </span>
+        </div>
+      }
+
+      <div class="acoes">
+        <a routerLink="/empreendimentos" class="botao botao--secundario">Cancelar</a>
+        <button type="submit" class="botao botao--primario" [disabled]="salvando()">
+          {{ salvando() ? 'Salvando...' : (modoEdicao() ? 'Salvar alterações' : 'Cadastrar') }}
+        </button>
+      </div>
+    </form>
+  }
+</div>
