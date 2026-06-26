@@ -2,6 +2,7 @@
 
 Aplicação para cadastro e gestão de empreendimentos, desenvolvida como case técnico. Permite cadastrar, listar (com filtros, ordenação e paginação), editar e inativar empreendimentos, respeitando as regras de negócio descritas no desafio.
 
+
 ## Tecnologias utilizadas
 
 **Backend**
