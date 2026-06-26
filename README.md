@@ -20,10 +20,8 @@ Aplicação para cadastro e gestão de empreendimentos, desenvolvida como case t
 
 **Banco de dados**
 - MySQL 8
-- Senha do MySQL :58931561
+
 ---
-
-
 
 ## Pré-requisitos
 
@@ -46,6 +44,33 @@ docker run --name mysql-empreendimentos \
 
 ---
 
+## Configuração do banco de dados
+
+1. Garanta que o MySQL está rodando e acessível.
+2. O `appsettings.json` versionado no repositório contém apenas um **placeholder** de connection string (sem credenciais reais):
+
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=localhost;Port=3306;Database=empreendimentos_db;User=root;Password=root;TreatTinyAsBoolean=true;"
+}
+```
+
+3. Para rodar localmente **sem expor sua senha real no Git**, configure-a via `dotnet user-secrets` (o projeto já está com `UserSecretsId` configurado no `.csproj`):
+
+```bash
+cd backend/src/Empreendimentos.Api
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Port=3306;Database=empreendimentos_db;User=root;Password=SUA_SENHA_AQUI;TreatTinyAsBoolean=true;"
+```
+
+O .NET carrega automaticamente o User Secret em ambiente de desenvolvimento, sobrescrevendo o valor do `appsettings.json` — e esse arquivo de secrets **nunca é versionado** (fica fora da pasta do projeto, em `%APPDATA%\Microsoft\UserSecrets` no Windows ou `~/.microsoft/usersecrets` no Linux/Mac).
+
+Alternativa via variável de ambiente (útil em CI/CD ou Docker):
+
+```bash
+export ConnectionStrings__DefaultConnection="Server=localhost;Port=3306;Database=empreendimentos_db;User=root;Password=SUA_SENHA_AQUI;TreatTinyAsBoolean=true;"
+```
+
+4. As migrations do EF Core criam a tabela `empreendimentos` automaticamente (passo abaixo).
 
 ---
 
@@ -54,8 +79,21 @@ docker run --name mysql-empreendimentos \
 ```bash
 cd backend
 
-# ou navegar por
-cd C:\Users\Carolina\Downloads\empreendimentos-app\empreendimentos-app\backend 
+# Restaurar dependências
+dotnet restore
+
+# Instalar a ferramenta de migrations do EF Core (se ainda não tiver)
+dotnet tool install --global dotnet-ef
+
+# Criar a migration inicial (gera o histórico de schema)
+dotnet ef migrations add InitialCreate \
+  --project src/Empreendimentos.Infrastructure \
+  --startup-project src/Empreendimentos.Api
+
+# Aplicar a migration no banco (cria a tabela empreendimentos)
+dotnet ef database update \
+  --project src/Empreendimentos.Infrastructure \
+  --startup-project src/Empreendimentos.Api
 
 # Executar a API
 dotnet run --project src/Empreendimentos.Api
@@ -63,6 +101,16 @@ dotnet run --project src/Empreendimentos.Api
 
 A API estará disponível em `http://localhost:5000`, com o **Swagger UI na raiz** (`http://localhost:5000/`).
 
+### Executando os testes unitários
+
+```bash
+cd backend
+dotnet test
+```
+
+Os testes cobrem:
+- Regras de negócio da entidade `Empreendimento` (nome mínimo, validação de CNPJ, transições de status, bloqueio de edição quando inativo).
+- Orquestração do `EmpreendimentoService` (conflito de CNPJ duplicado, não encontrado, fluxo de inativação), usando mocks do repositório.
 
 ---
 
@@ -87,40 +135,28 @@ A aplicação estará disponível em `http://localhost:4200`.
 
 ## Principais decisões técnicas
 
-### Clean Architecture no backend
-O backend foi dividido em 4 projetos com dependências unidirecionais (`Api → Infrastructure → Application → Domain`):
+### Por que separar o backend em camadas?
+Organizei o código em quatro partes (Domain, Application, Infrastructure e Api) para manter cada coisa no seu lugar. As regras do negócio — como "o nome precisa ter pelo menos 3 letras" ou "um empreendimento inativo não pode ser editado" — ficam isoladas numa camada que não depende de banco de dados nem de nenhuma biblioteca externa. Isso garante que essas regras sempre vão ser respeitadas, não importa de onde a informação chegue. As outras camadas só cuidam de "encanamento": falar com o banco, expor a API, etc.
 
-- **Domain**: contém a entidade `Empreendimento` com **todas as invariantes de negócio encapsuladas** (nome mínimo, formato de CNPJ, regra de "todo empreendimento nasce Ativo", bloqueio de edição quando inativo). Não depende de nenhum pacote externo — é C# puro. Isso garante que essas regras não possam ser "puladas" por nenhuma camada superior.
-- **Application**: orquestra casos de uso (`EmpreendimentoService`) e define a *interface* `IEmpreendimentoRepository` (porta de saída). A regra de unicidade de CNPJ vive aqui, pois depende de consultar o banco — não é uma invariante que a entidade consegue verificar sozinha.
-- **Infrastructure**: implementa o repositório com EF Core + MySQL, incluindo uma constraint **única no banco** para o CNPJ (defesa em profundidade contra condições de corrida, além da verificação feita na Application).
-- **Api**: expõe os endpoints REST, configura Swagger, CORS e o middleware global de tratamento de exceções.
+### Por que inativar em vez de excluir?
+Como pedido no desafio, nenhum registro é apagado do banco. Ao "remover" um empreendimento pela tela, ele só muda de status para Inativo — o histórico continua existindo, só que marcado como inativo.
 
-### Inativação em vez de exclusão
-Conforme exigido, não há endpoint de exclusão. O endpoint `PATCH /api/empreendimentos/{id}/inativar` apenas muda o status — o histórico do registro é preservado.
+### Como os erros são tratados
+Em vez de espalhar tratamento de erro por todo canto do código, criei um ponto único que intercepta qualquer problema (CNPJ duplicado, nome inválido, registro não encontrado) e devolve uma mensagem clara e padronizada. É essa mensagem que aparece nos avisos (toasts) que você vê na tela.
 
-### Tratamento de erros centralizado
-Em vez de `try/catch` repetido em cada controller, um `ExceptionHandlingMiddleware` captura exceções de domínio (`DomainException`, `NotFoundException`, `ConflictException`) e as traduz para `400`, `404` e `409` respectivamente, com um corpo de resposta padronizado (`status`, `titulo`, `mensagem`, `timestamp`). O frontend usa esse formato para popular as mensagens de erro no toast.
+### Cuidado com o CNPJ
+O CNPJ é guardado no banco só com os números, sem pontos ou barra — assim o sistema reconhece que "11.222.333/0001-81" e "11222333000181" são o mesmo CNPJ, evitando duplicidade por causa de formatação diferente. A máscara visual (com pontos e barra) é aplicada só na hora de mostrar na tela. A validação do CNPJ (aquele cálculo de dígito verificador) acontece tanto no formulário, para avisar o usuário na hora, quanto no backend, que é quem realmente garante que nada inválido entre no sistema.
 
-### Normalização do CNPJ
-O CNPJ é armazenado no banco apenas com dígitos (sem máscara), garantindo que a verificação de unicidade funcione independente de como o usuário formatou o campo. A formatação (`XX.XXX.XXX/XXXX-XX`) é responsabilidade da camada de apresentação (DTO de saída no backend e máscara no input do frontend).
+### Tecnologia mais atual no frontend
+O Angular foi feito com os recursos mais recentes (components standalone e signals), o que deixa o código mais simples e direto, sem a burocracia de versões mais antigas do framework.
 
-### Validação de CNPJ duplicada (frontend + backend)
-O algoritmo de validação do dígito verificador do CNPJ está implementado tanto no frontend (feedback imediato ao digitar) quanto no backend (fonte de verdade, já que o frontend nunca deve ser a única camada de validação).
+### Carregamento e erros de forma automática
+Toda vez que a tela precisa falar com o backend, um mecanismo único já cuida de mostrar a barra de carregamento e, se algo der errado, exibir o aviso de erro — sem precisar repetir essa lógica em cada tela.
 
-### Frontend com Standalone Components e Signals
-O projeto não usa NgModules — todos os componentes são `standalone`, seguindo o padrão recomendado a partir do Angular 17+. Estado local simples (filtros, loading, toasts) é gerenciado com `signal()` em vez de `BehaviorSubject`, o que simplifica a leitura reativa nos templates (`@if`, `@for`).
+### Busca, filtro e paginação ficam a cargo do backend
+Quando você filtra por nome, status ou muda a ordenação, é o backend que faz esse trabalho e devolve só os resultados da página atual. Isso evita carregar a lista inteira de uma vez, o que manteria o sistema rápido mesmo com muitos empreendimentos cadastrados.
 
-### Interceptor HTTP único para loading e erros
-Um único interceptor funcional (`apiInterceptor`) cuida de duas responsabilidades transversais a toda chamada HTTP:
-1. Ativa/desativa uma barra de carregamento global (suporta chamadas concorrentes via contador).
-2. Captura erros HTTP e os transforma em notificações toast, usando a mensagem vinda do backend quando disponível.
-
-### Paginação, filtro e ordenação no backend
-Para evitar carregar todos os registros no frontend, a listagem é paginada, filtrada e ordenada inteiramente no backend (via LINQ + EF Core), com os parâmetros (`nome`, `status`, `ordenarPor`, `decrescente`, `pagina`, `tamanhoPagina`) recebidos via query string.
-
-### Debounce na busca por nome
-O campo de busca por nome usa debounce de 350ms (RxJS) para evitar disparar uma requisição a cada tecla digitada.
+### Busca com uma pequena pausa
+Ao digitar no campo de busca por nome, o sistema espera você parar de digitar por um instante antes de buscar — assim ele não dispara uma busca a cada letra digitada, economizando chamadas desnecessárias.
 
 ---
-
-
